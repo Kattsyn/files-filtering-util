@@ -2,7 +2,7 @@ package kattsyn.dev;
 
 public enum DataTypes {
     //todo: add regexes
-    Float("floats", "/^-?(0|[1-9]+)(?:[.]\\d{1,2}|)$/"),
+    Float("floats", "^-?(0|[1-9]+)(?:[.]\\d{1,2}|)$"),
     Integer("integers", "[0-9]+"),
     String("strings", ".*");
 
