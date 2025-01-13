@@ -1,8 +1,6 @@
 package kattsyn.dev;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -43,20 +41,27 @@ public class Main {
 
     public static void main(String[] args) {
 
-        System.out.println("Вывод первого файла:\n " + TEST_INPUT_1);
-        System.out.println();
+        List<String> testFile1Lines = new ArrayList<>();
+        try (FileReader fileReader = new FileReader("test_input1.txt"); BufferedReader bufferedReader = new BufferedReader(fileReader)){
+            testFile1Lines = bufferedReader.lines().toList();
+        } catch (IOException e) {
+            System.out.println("Error while file reading: " + e);
+        }
+
+//        System.out.println("Вывод первого файла:\n " + TEST_INPUT_1);
+//        System.out.println();
         System.out.println("Вывод второго файла:\n " + TEST_INPUT_2);
         System.out.println();
 
         //Парсинг содержимого файлов в один список
-        String[] filesInputs = new String[]{TEST_INPUT_1, TEST_INPUT_2};
+        String[] filesInputs = new String[]{/*TEST_INPUT_1,*/ TEST_INPUT_2};
 
         List<String> stringList = new ArrayList<>();
         for (String file : filesInputs) {
             stringList.addAll(List.of(file.split("\n")));
         }
-
-        System.out.println(stringList);
+        stringList.addAll(testFile1Lines);
+        System.out.println("stringList: " + stringList);
 
         String[] classesNames = new String[]{"Float, Integer, String"};
 
