@@ -1,6 +1,7 @@
 package kattsyn.dev;
 
 import java.io.*;
+import java.text.DecimalFormat;
 import java.util.*;
 
 
@@ -9,6 +10,48 @@ public class FilesFilteringUtil {
     private static final String FLOAT_FILE_NAME = "floats.txt";
     private static final String INTEGER_FILE_NAME = "integers.txt";
     private static final String STRING_FILE_NAME = "strings.txt";
+
+    private static final Stats fullStatsInfo = new Stats();
+
+    private static class Stats {
+        double min = Double.MAX_VALUE;
+        double max = Double.MIN_VALUE;
+        double sum = 0;
+        int count = 0;
+        int stringMinLength = Integer.MAX_VALUE;
+        int stringMaxLength = Integer.MIN_VALUE;
+        boolean gotStrings = false;
+
+        public void updateStats(Number number) {
+            double value = number.doubleValue();
+            this.min = Math.min(value, this.min);
+            this.max = Math.max( value, this.max);
+            this.sum += value;
+            count++;
+        }
+
+        public void updateStringStats(String str) {
+            int length = str.length();
+            this.gotStrings = true;
+            stringMinLength = Math.min(stringMinLength, length);
+            stringMaxLength = Math.max(stringMaxLength, length);
+        }
+
+        public void outFullStats() {
+            if (count > 0) {
+                DecimalFormat decimalFormat = new DecimalFormat("0");
+                System.out.println("Минимальное число: " + decimalFormat.format(min));
+                System.out.println("Максимальное число: " + decimalFormat.format(max));
+                System.out.println("Сумма чисел: " + decimalFormat.format(sum));
+                System.out.println("Среднее число: " + (sum / count));
+            }
+            if (gotStrings) {
+                System.out.println("Минимальная длина строки: " + stringMinLength);
+                System.out.println("Максимальная длина строки: " + stringMaxLength);
+            }
+        }
+
+    }
 
     private static class CmdParams {
         boolean help;
@@ -71,9 +114,8 @@ public class FilesFilteringUtil {
         List<String> stringList = mergeFilesContent(cmdParams.inputFiles);
 
         Map<String, List<String>> stringListMap = new HashMap<>();
-        List<Number> numbers = new ArrayList<>();
 
-        separateStringsByMap(stringList, stringListMap, numbers);
+        separateStringsByMap(stringList, stringListMap, cmdParams.statType == CmdParams.StatType.FULL);
 
         for (Map.Entry<String, List<String>> entry : stringListMap.entrySet()) {
             writeContentToFile(cmdParams.resultPath, cmdParams.fileNamePrefix + entry.getKey(), entry.getValue(), cmdParams.appendMode);
@@ -81,7 +123,7 @@ public class FilesFilteringUtil {
 
         switch (cmdParams.statType) {
             case SHORT -> outShortStats(stringListMap);
-            case FULL -> outFullStats(stringListMap, numbers);
+            case FULL -> outFullStats(stringListMap);
         }
 
     }
@@ -169,37 +211,11 @@ public class FilesFilteringUtil {
      * То же самое для чисел.
      * @param stringListMap мапа, с распределенными строками и числами. Нужна для того, чтобы передать ее в метод outShortStats(),
      *                      а также по ключу STRING_FILE_NAME будет вытаскивать строки и выводить длину самой длинной и самой короткой строки
-     * @param numbers список чисел, среди которых будет искать min, max, avg, sum чисел.
      */
-    private static void outFullStats(Map<String, List<String>> stringListMap, List<Number> numbers) {
+    private static void outFullStats(Map<String, List<String>> stringListMap) {
         outShortStats(stringListMap);
 
-        if (!numbers.isEmpty()) {
-            float min = Float.MAX_VALUE;
-            float max = Float.MIN_VALUE;
-            float sum = 0;
-            for (Number n : numbers) {
-                float value = n.floatValue();
-                min = Math.min(min, value);
-                max = Math.max(max, value);
-                sum += value;
-            }
-            System.out.println("Минимальное число: " + min);
-            System.out.println("Максимальное число: " + max);
-            System.out.println("Сумма чисел: " + sum);
-            System.out.println("Среднее число: " + sum / (numbers.size()));
-        }
-
-        if (!stringListMap.get(STRING_FILE_NAME).isEmpty()) {
-            int min = Integer.MAX_VALUE;
-            int max = Integer.MIN_VALUE;
-            for (String str : stringListMap.get(STRING_FILE_NAME)) {
-                min = Math.min(min, str.length());
-                max = Math.max(max, str.length());
-            }
-            System.out.println("Минимальная длина строки: " + min);
-            System.out.println("Максимальная длина строки: " + max);
-        }
+        fullStatsInfo.outFullStats();
     }
 
     /**
@@ -208,9 +224,8 @@ public class FilesFilteringUtil {
      * Затем оно добавляется в список numbers, в котором собираются числа, чтобы в дальнейшем с ними делать статистику.
      * @param stringList список слов, которые нужно распределить
      * @param stringListMap мапа, в значениях которой лежат списки строк, куда уже будут распределяться строки или числа
-     * @param numbers список чисел, для дальнейшего расчета статистики.
      */
-    private static void separateStringsByMap(List<String> stringList, Map<String, List<String>> stringListMap, List<Number> numbers) {
+    private static void separateStringsByMap(List<String> stringList, Map<String, List<String>> stringListMap, boolean needFullStat) {
 
         stringListMap.put(INTEGER_FILE_NAME, new ArrayList<>());
         stringListMap.put(FLOAT_FILE_NAME, new ArrayList<>());
@@ -218,15 +233,17 @@ public class FilesFilteringUtil {
 
         for (String string : stringList) {
             if (isFloat(string)) {
-                float floatVal = Float.parseFloat(string);
-                stringListMap.get(FLOAT_FILE_NAME).add(String.valueOf(floatVal));
-                numbers.add(floatVal);
+                double value = Double.parseDouble(string);
+                stringListMap.get(FLOAT_FILE_NAME).add(String.valueOf(value));
+                if (needFullStat) fullStatsInfo.updateStats(value);
             } else if (isInteger(string)) {
-                int intVal = Integer.parseInt(string);
-                stringListMap.get(INTEGER_FILE_NAME).add(String.valueOf(intVal));
-                numbers.add(intVal);
+                //Number value = string.length() >= 10 ? Long.parseLong(string) : Integer.parseInt(string);
+                long value = Long.parseLong(string);
+                stringListMap.get(INTEGER_FILE_NAME).add(String.valueOf(value));
+                if (needFullStat) fullStatsInfo.updateStats(value);
             } else {
                 stringListMap.get(STRING_FILE_NAME).add(string);
+                if (needFullStat) fullStatsInfo.updateStringStats(string);
             }
         }
     }
