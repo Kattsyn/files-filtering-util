@@ -1,11 +1,8 @@
-agasga
-skwk
-24
-2.1
-wda
-123
-00.021
-0.0
-1,23
-4.
--123
+Lorem ipsum dolor sit amet
+45
+Пример
+3.1415
+consectetur adipiscing
+-0.001
+тестовое задание
+100500

@@ -1,7 +1,10 @@
 package kattsyn.dev;
 
 import java.io.*;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 
 public class FilesFilteringUtil {
@@ -9,6 +12,55 @@ public class FilesFilteringUtil {
     private static final String FLOAT_FILE_NAME = "floats.txt";
     private static final String INTEGER_FILE_NAME = "integers.txt";
     private static final String STRING_FILE_NAME = "strings.txt";
+
+    private static final Stats fullStatsInfo = new Stats();
+
+    private static class Stats {
+        Number min = Double.MAX_VALUE;
+        Number max = Double.MIN_VALUE;
+        double sum = 0;
+        int count = 0;
+        int stringMinLength = Integer.MAX_VALUE;
+        int stringMaxLength = Integer.MIN_VALUE;
+        boolean gotStrings = false;
+
+        public void updateStats(Number number) {
+            double value = number.doubleValue();
+            this.min = minNum(this.min, number);
+            this.max = maxNum(this.max, number);
+            this.sum += value;
+            count++;
+        }
+
+        public void updateStringStats(String str) {
+            int length = str.length();
+            this.gotStrings = true;
+            stringMinLength = Math.min(stringMinLength, length);
+            stringMaxLength = Math.max(stringMaxLength, length);
+        }
+
+        private Number maxNum(Number a, Number b) {
+            return a.doubleValue() >= b.doubleValue() ? a : b;
+        }
+
+        private Number minNum(Number a, Number b) {
+            return a.doubleValue() <= b.doubleValue() ? a : b;
+        }
+
+        public void outFullStats() {
+            if (count > 0) {
+                System.out.println("Минимальное число: " + min);
+                System.out.println("Максимальное число: " + max);
+                System.out.println("Сумма чисел: " + sum);
+                System.out.println("Среднее число: " + (sum / count));
+            }
+            if (gotStrings) {
+                System.out.println("Минимальная длина строки: " + stringMinLength);
+                System.out.println("Максимальная длина строки: " + stringMaxLength);
+            }
+        }
+
+    }
 
     private static class CmdParams {
         boolean help;
@@ -60,9 +112,10 @@ public class FilesFilteringUtil {
      * 3. Min и Max длины строк, если они были в изначальных файлах.
      * @param args массив строк параметров
      */
-    public static void filterUtils(String[] args) {
-        CmdParams cmdParams = parseArgs(args);
+    public static void filter(String[] args) {
 
+        CmdParams cmdParams = parseArgs(args);
+        long m = System.currentTimeMillis();
         if(cmdParams.help) {
             outHelpInfo();
             System.exit(0);
@@ -71,9 +124,8 @@ public class FilesFilteringUtil {
         List<String> stringList = mergeFilesContent(cmdParams.inputFiles);
 
         Map<String, List<String>> stringListMap = new HashMap<>();
-        List<Number> numbers = new ArrayList<>();
 
-        separateStringsByMap(stringList, stringListMap, numbers);
+        separateStringsByMap(stringList, stringListMap, cmdParams.statType == CmdParams.StatType.FULL);
 
         for (Map.Entry<String, List<String>> entry : stringListMap.entrySet()) {
             writeContentToFile(cmdParams.resultPath, cmdParams.fileNamePrefix + entry.getKey(), entry.getValue(), cmdParams.appendMode);
@@ -81,9 +133,11 @@ public class FilesFilteringUtil {
 
         switch (cmdParams.statType) {
             case SHORT -> outShortStats(stringListMap);
-            case FULL -> outFullStats(stringListMap, numbers);
+            case FULL -> outFullStats(stringListMap);
         }
 
+        System.out.print("\nВремя работы программы: ");
+        System.out.println((double) (System.currentTimeMillis() - m) + " мс");
     }
 
 
@@ -169,37 +223,11 @@ public class FilesFilteringUtil {
      * То же самое для чисел.
      * @param stringListMap мапа, с распределенными строками и числами. Нужна для того, чтобы передать ее в метод outShortStats(),
      *                      а также по ключу STRING_FILE_NAME будет вытаскивать строки и выводить длину самой длинной и самой короткой строки
-     * @param numbers список чисел, среди которых будет искать min, max, avg, sum чисел.
      */
-    private static void outFullStats(Map<String, List<String>> stringListMap, List<Number> numbers) {
+    private static void outFullStats(Map<String, List<String>> stringListMap) {
         outShortStats(stringListMap);
 
-        if (!numbers.isEmpty()) {
-            float min = Float.MAX_VALUE;
-            float max = Float.MIN_VALUE;
-            float sum = 0;
-            for (Number n : numbers) {
-                float value = n.floatValue();
-                min = Math.min(min, value);
-                max = Math.max(max, value);
-                sum += value;
-            }
-            System.out.println("Минимальное число: " + min);
-            System.out.println("Максимальное число: " + max);
-            System.out.println("Сумма чисел: " + sum);
-            System.out.println("Среднее число: " + sum / (numbers.size()));
-        }
-
-        if (!stringListMap.get(STRING_FILE_NAME).isEmpty()) {
-            int min = Integer.MAX_VALUE;
-            int max = Integer.MIN_VALUE;
-            for (String str : stringListMap.get(STRING_FILE_NAME)) {
-                min = Math.min(min, str.length());
-                max = Math.max(max, str.length());
-            }
-            System.out.println("Минимальная длина строки: " + min);
-            System.out.println("Максимальная длина строки: " + max);
-        }
+        fullStatsInfo.outFullStats();
     }
 
     /**
@@ -208,9 +236,8 @@ public class FilesFilteringUtil {
      * Затем оно добавляется в список numbers, в котором собираются числа, чтобы в дальнейшем с ними делать статистику.
      * @param stringList список слов, которые нужно распределить
      * @param stringListMap мапа, в значениях которой лежат списки строк, куда уже будут распределяться строки или числа
-     * @param numbers список чисел, для дальнейшего расчета статистики.
      */
-    private static void separateStringsByMap(List<String> stringList, Map<String, List<String>> stringListMap, List<Number> numbers) {
+    private static void separateStringsByMap(List<String> stringList, Map<String, List<String>> stringListMap, boolean needFullStat) {
 
         stringListMap.put(INTEGER_FILE_NAME, new ArrayList<>());
         stringListMap.put(FLOAT_FILE_NAME, new ArrayList<>());
@@ -218,15 +245,16 @@ public class FilesFilteringUtil {
 
         for (String string : stringList) {
             if (isFloat(string)) {
-                float floatVal = Float.parseFloat(string);
-                stringListMap.get(FLOAT_FILE_NAME).add(String.valueOf(floatVal));
-                numbers.add(floatVal);
+                double value = Double.parseDouble(string);
+                stringListMap.get(FLOAT_FILE_NAME).add(String.valueOf(value));
+                if (needFullStat) fullStatsInfo.updateStats(value);
             } else if (isInteger(string)) {
-                int intVal = Integer.parseInt(string);
-                stringListMap.get(INTEGER_FILE_NAME).add(String.valueOf(intVal));
-                numbers.add(intVal);
+                long value = Long.parseLong(string);
+                stringListMap.get(INTEGER_FILE_NAME).add(String.valueOf(value));
+                if (needFullStat) fullStatsInfo.updateStats(value);
             } else {
                 stringListMap.get(STRING_FILE_NAME).add(string);
+                if (needFullStat) fullStatsInfo.updateStringStats(string);
             }
         }
     }
@@ -261,7 +289,7 @@ public class FilesFilteringUtil {
      * @param fileName имя файла
      * @return File который был создан либо по указанному пути, либо по дефолтному пути создания файла, либо null, если не удалось создать файл.
      */
-    public static File createFile(String filePath, String fileName) {
+    private static File createFile(String filePath, String fileName) {
         if (filePath.isBlank()) {
             return new File(fileName);
         }
@@ -306,7 +334,7 @@ public class FilesFilteringUtil {
      * @param appendMode режим добавления в уже существующий файл. Если true, то будет добавлять в конец файла содержимое нашего списка content
      * @param <T>        параметр <T>, тип данных которого будем записывать в файлы.
      */
-    public static <T> void writeContentToFile(String filePath, String fileName, List<T> content, boolean appendMode) {
+    private static <T> void writeContentToFile(String filePath, String fileName, List<T> content, boolean appendMode) {
         File createFileDirResult = createFile(filePath, fileName);
 
         if (createFileDirResult == null) {
@@ -367,14 +395,25 @@ public class FilesFilteringUtil {
         char[] data = str.toCharArray();
         int index = 0;
         boolean containsSeparator = false;
+        boolean exponentialForm = false;
         if ((data[0] == '-' || data[0] == '+') && (data.length > 1)) {
             index = 1;
         }
         for (; index < data.length; index++) {
+            //если символ - число
             if (!Character.isDigit(data[index])) {
+                //если встретили точку, и не встречали еще разделитель (точку)
                 if (data[index] == '.' && !containsSeparator) {
                     containsSeparator = true;
-                } else {
+                    //если встречали разделитель, не встречали 'e' или 'E', а сейчас встретили 'e' или 'E'
+                } else if (containsSeparator && !exponentialForm && (data[index] == 'E' || data[index] == 'e')) {
+                    exponentialForm = true;
+                    //если только что встретили 'e', это еще не конец списка, а следующий символ '-'
+                    if (index != data.length - 1 && data[index + 1] == '-') {
+                        index++;
+                    }
+                }
+                else {
                     return false;
                 }
             }
