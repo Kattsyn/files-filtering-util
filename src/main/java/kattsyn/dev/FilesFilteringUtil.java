@@ -1,8 +1,10 @@
 package kattsyn.dev;
 
 import java.io.*;
-import java.text.DecimalFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 
 public class FilesFilteringUtil {
@@ -14,8 +16,8 @@ public class FilesFilteringUtil {
     private static final Stats fullStatsInfo = new Stats();
 
     private static class Stats {
-        double min = Double.MAX_VALUE;
-        double max = Double.MIN_VALUE;
+        Number min = Double.MAX_VALUE;
+        Number max = Double.MIN_VALUE;
         double sum = 0;
         int count = 0;
         int stringMinLength = Integer.MAX_VALUE;
@@ -24,8 +26,8 @@ public class FilesFilteringUtil {
 
         public void updateStats(Number number) {
             double value = number.doubleValue();
-            this.min = Math.min(value, this.min);
-            this.max = Math.max( value, this.max);
+            this.min = minNum(this.min, number);
+            this.max = maxNum(this.max, number);
             this.sum += value;
             count++;
         }
@@ -37,12 +39,19 @@ public class FilesFilteringUtil {
             stringMaxLength = Math.max(stringMaxLength, length);
         }
 
+        private Number maxNum(Number a, Number b) {
+            return a.doubleValue() >= b.doubleValue() ? a : b;
+        }
+
+        private Number minNum(Number a, Number b) {
+            return a.doubleValue() <= b.doubleValue() ? a : b;
+        }
+
         public void outFullStats() {
             if (count > 0) {
-                DecimalFormat decimalFormat = new DecimalFormat("0");
-                System.out.println("Минимальное число: " + decimalFormat.format(min));
-                System.out.println("Максимальное число: " + decimalFormat.format(max));
-                System.out.println("Сумма чисел: " + decimalFormat.format(sum));
+                System.out.println("Минимальное число: " + min);
+                System.out.println("Максимальное число: " + max);
+                System.out.println("Сумма чисел: " + sum);
                 System.out.println("Среднее число: " + (sum / count));
             }
             if (gotStrings) {
@@ -103,9 +112,10 @@ public class FilesFilteringUtil {
      * 3. Min и Max длины строк, если они были в изначальных файлах.
      * @param args массив строк параметров
      */
-    public static void filterUtils(String[] args) {
-        CmdParams cmdParams = parseArgs(args);
+    public static void filter(String[] args) {
 
+        CmdParams cmdParams = parseArgs(args);
+        long m = System.currentTimeMillis();
         if(cmdParams.help) {
             outHelpInfo();
             System.exit(0);
@@ -126,6 +136,8 @@ public class FilesFilteringUtil {
             case FULL -> outFullStats(stringListMap);
         }
 
+        System.out.print("\nВремя работы программы: ");
+        System.out.println((double) (System.currentTimeMillis() - m) + " мс");
     }
 
 
@@ -237,7 +249,6 @@ public class FilesFilteringUtil {
                 stringListMap.get(FLOAT_FILE_NAME).add(String.valueOf(value));
                 if (needFullStat) fullStatsInfo.updateStats(value);
             } else if (isInteger(string)) {
-                //Number value = string.length() >= 10 ? Long.parseLong(string) : Integer.parseInt(string);
                 long value = Long.parseLong(string);
                 stringListMap.get(INTEGER_FILE_NAME).add(String.valueOf(value));
                 if (needFullStat) fullStatsInfo.updateStats(value);
@@ -278,7 +289,7 @@ public class FilesFilteringUtil {
      * @param fileName имя файла
      * @return File который был создан либо по указанному пути, либо по дефолтному пути создания файла, либо null, если не удалось создать файл.
      */
-    public static File createFile(String filePath, String fileName) {
+    private static File createFile(String filePath, String fileName) {
         if (filePath.isBlank()) {
             return new File(fileName);
         }
@@ -323,7 +334,7 @@ public class FilesFilteringUtil {
      * @param appendMode режим добавления в уже существующий файл. Если true, то будет добавлять в конец файла содержимое нашего списка content
      * @param <T>        параметр <T>, тип данных которого будем записывать в файлы.
      */
-    public static <T> void writeContentToFile(String filePath, String fileName, List<T> content, boolean appendMode) {
+    private static <T> void writeContentToFile(String filePath, String fileName, List<T> content, boolean appendMode) {
         File createFileDirResult = createFile(filePath, fileName);
 
         if (createFileDirResult == null) {
@@ -384,14 +395,25 @@ public class FilesFilteringUtil {
         char[] data = str.toCharArray();
         int index = 0;
         boolean containsSeparator = false;
+        boolean exponentialForm = false;
         if ((data[0] == '-' || data[0] == '+') && (data.length > 1)) {
             index = 1;
         }
         for (; index < data.length; index++) {
+            //если символ - число
             if (!Character.isDigit(data[index])) {
+                //если встретили точку, и не встречали еще разделитель (точку)
                 if (data[index] == '.' && !containsSeparator) {
                     containsSeparator = true;
-                } else {
+                    //если встречали разделитель, не встречали 'e' или 'E', а сейчас встретили 'e' или 'E'
+                } else if (containsSeparator && !exponentialForm && (data[index] == 'E' || data[index] == 'e')) {
+                    exponentialForm = true;
+                    //если только что встретили 'e', это еще не конец списка, а следующий символ '-'
+                    if (index != data.length - 1 && data[index + 1] == '-') {
+                        index++;
+                    }
+                }
+                else {
                     return false;
                 }
             }
